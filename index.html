@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快乐小鸡</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- 像图片一样从当前目录加载，file:// 下也可用 -->
+    <audio id="audio-hen" src="chick_3s.mp3" preload></audio>
+    <audio id="audio-crack" src="egg.mp3" preload></audio>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <button id="fullscreen-btn" class="fullscreen-btn" aria-label="全屏">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            </svg>
+        </button>
+
+        <div id="parent-settings" class="parent-settings hidden">
+            <div class="settings-content">
+                <h2>家长设置</h2>
+                <label>
+                    <input type="checkbox" id="sound-toggle" checked>
+                    音效
+                </label>
+                <label>
+                    <input type="checkbox" id="autofullscreen-toggle" checked>
+                    自动全屏
+                </label>
+                <button id="reset-btn">重置游戏</button>
+                <button id="close-settings-btn">关闭</button>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
