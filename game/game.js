@@ -166,9 +166,106 @@ function updateMainChicken() {
   m.y += (dy / dist) * move;
 }
 
+function random(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+class Cloud {
+  constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.particles = [];
+      this.generateShape();
+  }
+
+  generateShape() {
+      const numParticles = 32;
+      const baseRadius = 32;
+      const spreadX = 120;
+      const spreadY = 32;
+
+      for (let i = 0; i < numParticles; i++) {
+          let offsetX = (Math.random() - 0.5) * spreadX * 2;
+          let offsetY = (Math.random() - 0.5) * spreadY * 1.5;
+          let radius = baseRadius * (0.5 + Math.random() * 0.8);
+
+          this.particles.push({
+              x: offsetX,
+              y: offsetY,
+              r: radius,
+              opacity: random(0.05, 0.15)
+          });
+      }
+  }
+
+  getWidth() {
+      if (this.particles.length === 0) return 200;
+      const minX = Math.min(...this.particles.map(p => p.x - p.r));
+      const maxX = Math.max(...this.particles.map(p => p.x + p.r));
+      return (maxX - minX) * 1.15;
+  }
+
+  draw(ctx, time) {
+      ctx.save();
+      // 整体移动云朵（模拟漂浮）
+      const floatX = this.x + Math.sin(time * 0.0005) * 20;
+      const floatY = this.y + Math.cos(time * 0.001) * 10;
+      ctx.translate(floatX, floatY);
+
+      // 1. 绘制阴影层 (Shadow Pass)
+      // 将整个云向下偏移一点，用深色绘制，模拟体积感
+      ctx.fillStyle = 'rgba(200, 210, 220, 0.4)'; 
+      for (let p of this.particles) {
+          ctx.beginPath();
+          // 阴影向右下偏移
+          ctx.arc(p.x + 15, p.y + 15, p.r * 0.95, 0, Math.PI * 2);
+          ctx.fill();
+      }
+
+      // 2. 绘制主体层 (Body Pass)
+      // 使用纯白，但带有一定的透明度叠加
+      for (let p of this.particles) {
+          // 创建径向渐变，让每个球体看起来柔和
+          // 渐变中心相对于粒子中心
+          let grad = ctx.createRadialGradient(
+              p.x - p.r * 0.3, p.y - p.r * 0.3, 0, // 高光点
+              p.x, p.y, p.r // 边缘
+          );
+          
+          // 核心颜色：白
+          grad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+          // 中间过渡
+          grad.addColorStop(0.4, 'rgba(255, 255, 255, 0.5)');
+          // 边缘透明，实现融合
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+      }
+
+      ctx.restore();
+  }
+}
+
+let cloudInstances = [];
+const cloudConfigs = [
+  { offset: 0, yRatio: 0.18 },
+  { offset: 450, yRatio: 0.28 },
+  { offset: 900, yRatio: 0.12 },
+  { offset: 350, yRatio: 0.35 },
+];
+
 function init() {
   henAudio = document.getElementById('audio-hen');
   crackAudio = document.getElementById('audio-crack');
+  if (cloudInstances.length !== cloudConfigs.length) {
+    cloudInstances = [];
+    for (let i = 0; i < cloudConfigs.length; i++) {
+      cloudInstances.push(new Cloud(0, 0));
+    }
+  }
   try {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   } catch (e) {
@@ -347,6 +444,16 @@ function createEggAtPosition(centerX, centerY) {
   mainChicken.pendingEgg = { centerX, centerY };
 }
 
+// 蛋周围黄光光晕（与太阳光晕一致）
+function drawEggGlow(cx, cy) {
+  const rx = EGG_DISPLAY_W / 2 + 2;
+  const ry = EGG_DISPLAY_H / 2 + 2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 220, 100, 0.35)';
+  ctx.fill();
+}
+
 // 从 eggs.png 切图绘制第 index 枚蛋 (0–7)
 function drawEggSprite(eggIndex, dx, dy, dWidth, dHeight) {
   const r = eggRects[eggIndex];
@@ -472,7 +579,7 @@ function updateChickens(now) {
   }
 }
 
-function drawBackground() {
+function drawBackground(now) {
   const w = canvas.width;
   const h = canvas.height;
 
@@ -484,8 +591,43 @@ function drawBackground() {
   ctx.fillStyle = skyG;
   ctx.fillRect(0, 0, w, h);
 
+  // 白云：使用 Cloud 类生成，左到右循环 + 轻微漂浮
+  const cloudSpeed = 0.022;
+  for (let i = 0; i < cloudInstances.length; i++) {
+    const config = cloudConfigs[i];
+    const cloud = cloudInstances[i];
+    const totalW = cloud.getWidth();
+    const period = w + totalW * 2;
+    const t = ((config.offset + now * cloudSpeed) % period + period) % period;
+    const x0 = t - totalW;
+    const cy = h * config.yRatio;
+    for (let k = -1; k <= 1; k++) {
+      const x = x0 + k * period;
+      if (x + totalW < -40 || x - totalW > w + 40) continue;
+      cloud.x = x + totalW / 2;
+      cloud.y = cy;
+      cloud.draw(ctx, now);
+    }
+  }
+
+  // 右上角小太阳（避开全屏按钮，留足间距）
+  const sunX = w - 162;
+  const sunY = 62;
+  const sunR = 36;
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, sunR + 8, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 220, 100, 0.35)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+  ctx.fillStyle = '#FFEB3B';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 200, 80, 0.6)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
   // 草地：一两个大曲线，像远山/大地平线
-  const baseY = h * 0.55;
+  const baseY = h * 0.61;
   const wave1 = h * 0.07;  // 第一道大起伏
   const wave2 = h * 0.04;  // 第二道略小
   const len1 = w * 0.7;    // 波长约屏宽 70%，一整道大弧
@@ -518,7 +660,7 @@ function gameLoop() {
   updateEggs(now);
   updateChickens(now);
 
-  drawBackground();
+  drawBackground(now);
 
   // 先画大鸡（在蛋和小鸡下层）
   if (mainChicken) {
@@ -529,7 +671,9 @@ function gameLoop() {
     const w = m.displayW;
     const h = m.displayH;
     const moving = m.targetX != null && m.targetY != null;
-    const frameIndex = moving ? Math.floor(now / 120) % CHICK_FRAME_COUNT : 0;
+    const frameIndex = moving
+      ? Math.floor(now / 120) % CHICK_FRAME_COUNT
+      : Math.floor(now / 900) % 2;
     // chickens.png 默认面朝右。往左走或停下朝左时需水平翻转
     const movingLeft = moving && m.targetX < (m.startX ?? m.x);
     const faceLeft = moving ? movingLeft : m.idleFacingLeft;
@@ -561,9 +705,13 @@ function gameLoop() {
       ctx.translate(egg.x + EGG_DISPLAY_W / 2, egg.y + EGG_DISPLAY_H);
       ctx.rotate(angle);
       ctx.translate(-EGG_DISPLAY_W / 2, -EGG_DISPLAY_H);
+      drawEggGlow(EGG_DISPLAY_W / 2, EGG_DISPLAY_H / 2);
       drawEggSprite(index, 0, 0, EGG_DISPLAY_W, EGG_DISPLAY_H);
       ctx.restore();
     } else {
+      const cx = egg.x + EGG_DISPLAY_W / 2;
+      const cy = egg.y + EGG_DISPLAY_H / 2;
+      drawEggGlow(cx, cy);
       drawEggSprite(index, egg.x, egg.y, EGG_DISPLAY_W, EGG_DISPLAY_H);
     }
   }
