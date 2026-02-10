@@ -546,7 +546,26 @@ function gameLoop() {
 
   for (const egg of eggs) {
     const index = getEggSheetIndexForEgg(egg);
-    drawEggSprite(index, egg.x, egg.y, EGG_DISPLAY_W, EGG_DISPLAY_H);
+    if (egg.phase === 'shake') {
+      const elapsed = now - egg.phaseStartTime;
+      const bounceDur = 350;
+      const bounceY = elapsed < bounceDur
+        ? -6 * Math.sin((elapsed / bounceDur) * Math.PI)
+        : 0;
+      const tiltElapsed = elapsed - bounceDur;
+      const angle = tiltElapsed >= 0
+        ? Math.sin(tiltElapsed * 0.01) * 0.1
+        : 0;
+      ctx.save();
+      ctx.translate(0, bounceY);
+      ctx.translate(egg.x + EGG_DISPLAY_W / 2, egg.y + EGG_DISPLAY_H);
+      ctx.rotate(angle);
+      ctx.translate(-EGG_DISPLAY_W / 2, -EGG_DISPLAY_H);
+      drawEggSprite(index, 0, 0, EGG_DISPLAY_W, EGG_DISPLAY_H);
+      ctx.restore();
+    } else {
+      drawEggSprite(index, egg.x, egg.y, EGG_DISPLAY_W, EGG_DISPLAY_H);
+    }
   }
 
   for (const chicken of chickens) {
